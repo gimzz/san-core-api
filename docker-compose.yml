@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgres_db:
+    image: postgres:16-alpine
+    container_name: bolso_postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=bolso_user
+      - POSTGRES_PASSWORD=bolso_password
+      - POSTGRES_DB=bolso_db
+      - TZ=America/Caracas
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U bolso_user -d bolso_db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bolso_net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bolso_nestjs_api
+    restart: always
+    ports:
+      - "4050:3000"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - bolso_net
+
+volumes:
+  postgres_data:
+
+networks:
+  bolso_net:
+    driver: bridge
