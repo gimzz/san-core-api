@@ -7,19 +7,20 @@ export const getTypeOrmConfig = (
 ): TypeOrmModuleOptions => ({
   type: 'postgres',
   host: configService.get<string>('DB_HOST', 'localhost'),
-  port: parseInt(configService.get<string>('DB_PORT', '5432'), 10),
+  port: parseInt(configService.get<string>('DB_PORT_HOST', '5435'), 10),
   username: configService.get<string>('DB_USERNAME', 'bolso_user'),
   password: configService.get<string>('DB_PASSWORD', 'bolso_password'),
   database: configService.get<string>('DB_NAME', 'bolso_db'),
   autoLoadEntities: true,
-  logging: false,
+  synchronize: true,
+  logging: ['error', 'warn', 'schema'],
 });
 
 export const customDataSourceFactory = async (options?: DataSourceOptions) => {
   if (!options) {
     throw new Error('Invalid options passed to dataSourceFactory');
   }
-  // Create pre-connection without synchronize to auto-create missing PostgreSQL schemas
+
   const schemaInitializer = new DataSource({
     ...options,
     synchronize: false,
@@ -32,7 +33,9 @@ export const customDataSourceFactory = async (options?: DataSourceOptions) => {
   }
   await schemaInitializer.destroy();
 
-  // Initialize primary DataSource with synchronize enabled
-  const dataSource = new DataSource(options);
+  const dataSource = new DataSource({
+    ...options,
+    synchronize: true,
+  });
   return dataSource.initialize();
 };

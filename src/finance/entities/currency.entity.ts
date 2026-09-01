@@ -5,7 +5,7 @@ export class Currency {
   @PrimaryGeneratedColumn('increment')
   id: number;
 
-  @Column({ unique: true, length: 3 })
+  @Column({ unique: true, length: 10 })
   code: string;
 
   @Column({ length: 5 })
