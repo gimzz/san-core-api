@@ -6,6 +6,8 @@ import { PersonDocument } from './entities/person-document.entity';
 import { ContactType } from './entities/contact-type.entity';
 import { PersonContact } from './entities/person-contact.entity';
 import { PersonAddress } from './entities/person-address.entity';
+import { CoreService } from './core.service';
+import { CoreController } from './core.controller';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { PersonAddress } from './entities/person-address.entity';
       PersonAddress,
     ]),
   ],
-  exports: [TypeOrmModule],
+  controllers: [CoreController],
+  providers: [CoreService],
+  exports: [CoreService, TypeOrmModule],
 })
 export class CoreModule {}
