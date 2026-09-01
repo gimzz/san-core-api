@@ -18,14 +18,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET', 'bolso_jwt_secret_key_2026_custom'),
+      secretOrKey: configService.get<string>('JWT_SECRET') || process.env.JWT_SECRET || 'bolso_jwt_secret_key_2026_custom',
     });
   }
-
   async validate(payload: JwtPayload) {
     const user = await this.usersService.findById(payload.sub);
     if (!user) {
-      throw new UnauthorizedException('User no longer exists or token invalid');
+      throw new UnauthorizedException('Usuario inválido o no existe');
     }
     const { passwordHash, ...result } = user;
     return result;
