@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Currency } from './entities/currency.entity';
 import { PaymentMethodType } from './entities/payment-method-type.entity';
 import { UserPaymentMethod } from './entities/user-payment-method.entity';
+import { FinanceService } from './finance.service';
+import { FinanceController } from './finance.controller';
 
 @Module({
   imports: [
@@ -12,6 +14,9 @@ import { UserPaymentMethod } from './entities/user-payment-method.entity';
       UserPaymentMethod,
     ]),
   ],
-  exports: [TypeOrmModule],
+  controllers: [FinanceController],
+  providers: [FinanceService],
+  exports: [FinanceService, TypeOrmModule],
 })
 export class FinanceModule {}
+
