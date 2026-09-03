@@ -63,6 +63,20 @@ export class FinanceController {
     return this.financeService.getPaymentMethodTypes();
   }
 
+  @ApiOperation({
+    summary: 'Listar catálogo de bancos nacionales autorizados',
+    description:
+      'Retorna el listado maestro de instituciones bancarias autorizadas por SUDEBAN con sus códigos oficiales (ej: 0102 - Banco de Venezuela).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Catálogo de bancos recuperado exitosamente.',
+  })
+  @Get('banks')
+  getBanks() {
+    return this.financeService.getBanks();
+  }
+
   // ─────────────────────────────────────────────
   // MÉTODOS DE PAGO DEL USUARIO
   // ─────────────────────────────────────────────
@@ -82,9 +96,35 @@ export class FinanceController {
   }
 
   @ApiOperation({
+    summary: 'Obtener método de cobro por ID',
+    description:
+      'Retorna el detalle de un método de cobro específico del usuario autenticado. Solo el propietario puede consultarlo.',
+  })
+  @ApiParam({ name: 'id', description: 'ID del método de cobro a consultar', example: 1 })
+  @ApiResponse({
+    status: 200,
+    description: 'Método de cobro recuperado exitosamente.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No tienes permiso para consultar este método de pago.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Método de cobro no encontrado.',
+  })
+  @Get('my-payment-methods/:id')
+  getPaymentMethodById(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.financeService.getPaymentMethodById(req.user.id, id);
+  }
+
+  @ApiOperation({
     summary: 'Registrar nuevo método de cobro',
     description:
-      'Agrega una cuenta de Pago Móvil, transferencia bancaria o billetera Binance Pay al perfil del usuario autenticado. Los campos requeridos varían según el tipo seleccionado.',
+      'Agrega una cuenta de Pago Móvil, transferencia bancaria o billetera Binance Pay al perfil del usuario autenticado. Máximo 3 cuentas por tipo. El código bancario se valida contra el catálogo de bancos autorizados.',
   })
   @ApiBody({ type: CreateUserPaymentMethodDto })
   @ApiResponse({
@@ -93,7 +133,7 @@ export class FinanceController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Campos requeridos faltantes según el tipo de método seleccionado.',
+    description: 'Campos requeridos faltantes, código bancario no autorizado, o límite de 3 métodos por tipo alcanzado.',
   })
   @ApiResponse({
     status: 404,

@@ -82,13 +82,25 @@ async updateProfile(personId: number, dto: UpdatePersonProfileDto) {
       throw new NotFoundException('Tipo de documento inválido');
     }
 
-    const existing = await this.documentRepository.findOne({
+    // Restricción: 1 documento por tipo por persona
+    const existingForPerson = await this.documentRepository.findOne({
+      where: {
+        idPerson: personId,
+        idDocumentType: dto.idDocumentType,
+      },
+    });
+    if (existingForPerson) {
+      throw new ConflictException('La persona ya posee un documento registrado de este tipo');
+    }
+
+    // Restricción: número de documento único por tipo
+    const existingDoc = await this.documentRepository.findOne({
       where: {
         idDocumentType: dto.idDocumentType,
         documentNumber: dto.documentNumber,
       },
     });
-    if (existing) {
+    if (existingDoc) {
       throw new ConflictException('Este número de documento ya está registrado');
     }
 
@@ -123,6 +135,7 @@ async updateProfile(personId: number, dto: UpdatePersonProfileDto) {
       city: dto.city,
       state: dto.state,
       postalCode: dto.postalCode,
+      country: dto.country || 'Venezuela',
     });
     return this.addressRepository.save(address);
   }

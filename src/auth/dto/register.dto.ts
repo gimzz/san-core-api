@@ -8,6 +8,7 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
+import { IsAdult } from '../validators/is-adult.validator';
 
 export class RegisterDto {
   @ApiProperty({ example: 'juan.perez@example.com', description: 'Correo electrónico / usuario' })
@@ -40,9 +41,10 @@ export class RegisterDto {
   @IsOptional()
   secondLastName?: string;
 
-  @ApiProperty({ example: '1995-08-20', description: 'Fecha de nacimiento (YYYY-MM-DD)' })
+  @ApiProperty({ example: '1995-08-20', description: 'Fecha de nacimiento (YYYY-MM-DD). Debe ser mayor de 18 años.' })
   @IsDateString({}, { message: 'La fecha de nacimiento debe tener formato YYYY-MM-DD' })
   @IsNotEmpty()
+  @IsAdult()
   birthDate: string;
 
   @ApiProperty({ example: 1, description: 'ID del tipo de documento (1: Cédula, 2: Pasaporte, 3: RIF)' })
@@ -56,9 +58,9 @@ export class RegisterDto {
   documentNumber: string;
 
   @ApiProperty({
-    example: 'juan.invitador@example.com',
+    example: 'BOLSO-K9F2',
     required: false,
-    description: 'Código de referido o correo del usuario que lo invitó a la plataforma',
+    description: 'Código alfanumérico del usuario que lo invitó a la plataforma',
   })
   @IsString()
   @IsOptional()

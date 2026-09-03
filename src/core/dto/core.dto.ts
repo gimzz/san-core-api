@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
 } from 'class-validator';
 
 export class UpdatePersonProfileDto {
@@ -52,9 +53,15 @@ export class AddContactDto {
   @IsNotEmpty()
   idContactType: number;
 
-  @ApiProperty({ example: '+584121234567', description: 'Valor del canal de contacto' })
+  @ApiProperty({
+    example: '+584121234567',
+    description: 'Valor del canal de contacto. Para teléfonos debe usar formato internacional E.164 (ej: +584121234567)',
+  })
   @IsString()
   @IsNotEmpty()
+  @Matches(/^\+[1-9]\d{1,14}$/, {
+    message: 'El contacto debe tener formato internacional E.164 (ej: +584121234567)',
+  })
   contactValue: string;
 }
 
@@ -78,4 +85,9 @@ export class AddAddressDto {
   @IsString()
   @IsOptional()
   postalCode?: string;
+
+  @ApiProperty({ example: 'Venezuela', required: false, description: 'País (por defecto: Venezuela)' })
+  @IsString()
+  @IsOptional()
+  country?: string;
 }

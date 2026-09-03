@@ -11,6 +11,7 @@ import { DocumentType } from './document-type.entity';
 
 @Entity({ schema: 'core', name: 'person_documents' })
 @Index(['idDocumentType', 'documentNumber'], { unique: true })
+@Index(['idPerson', 'idDocumentType'], { unique: true })
 export class PersonDocument {
   @PrimaryGeneratedColumn('increment')
   id: number;

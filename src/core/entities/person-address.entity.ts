@@ -27,6 +27,9 @@ export class PersonAddress {
   @Column({ name: 'postal_code', length: 20, nullable: true })
   postalCode: string;
 
+  @Column({ length: 100, default: 'Venezuela' })
+  country: string;
+
   @ManyToOne(() => Person, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_person' })
   person: Person;

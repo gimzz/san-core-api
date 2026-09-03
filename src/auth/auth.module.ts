@@ -17,7 +17,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET', 'bolso_jwt_secret_key_2026_custom'),
         signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRES_IN', '1d'),
+          expiresIn: configService.get<string>('JWT_EXPIRES_IN', '15m'),
         },
       }),
     }),

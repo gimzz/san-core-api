@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { Currency } from './entities/currency.entity';
 import { PaymentMethodType } from './entities/payment-method-type.entity';
 import { UserPaymentMethod } from './entities/user-payment-method.entity';
+import { Bank } from './entities/bank.entity';
 import { CreateUserPaymentMethodDto, UpdateUserPaymentMethodDto } from './dto/finance.dto';
 
 @Injectable()
@@ -22,6 +23,9 @@ export class FinanceService {
 
     @InjectRepository(UserPaymentMethod)
     private readonly userPaymentMethodRepository: Repository<UserPaymentMethod>,
+
+    @InjectRepository(Bank)
+    private readonly bankRepository: Repository<Bank>,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -36,6 +40,10 @@ export class FinanceService {
     return this.paymentMethodTypeRepository.find();
   }
 
+  async getBanks(): Promise<Bank[]> {
+    return this.bankRepository.find({ order: { code: 'ASC' } });
+  }
+
   // ─────────────────────────────────────────────
   // MÉTODOS DE PAGO DEL USUARIO (CRUD autenticado)
   // ─────────────────────────────────────────────
@@ -45,6 +53,10 @@ export class FinanceService {
       where: { idUser: userId },
       relations: ['paymentMethodType'],
     });
+  }
+
+  async getPaymentMethodById(userId: number, id: number): Promise<UserPaymentMethod> {
+    return this.findOwnedPaymentMethod(userId, id);
   }
 
   async createPaymentMethod(
@@ -63,6 +75,31 @@ export class FinanceService {
 
     // Validación de campos requeridos según el tipo de método
     this.validateFieldsByMethodType(methodType.name, dto);
+
+    // Validar que el código bancario exista en el catálogo de bancos (cuando aplica)
+    if (dto.bankCode) {
+      const bank = await this.bankRepository.findOne({
+        where: { code: dto.bankCode },
+      });
+      if (!bank) {
+        throw new BadRequestException(
+          `El código bancario '${dto.bankCode}' no corresponde a ningún banco autorizado en el catálogo`,
+        );
+      }
+    }
+
+    // Validar límite de máximo 3 métodos por tipo por usuario
+    const existingCount = await this.userPaymentMethodRepository.count({
+      where: {
+        idUser: userId,
+        idPaymentMethodType: dto.idPaymentMethodType,
+      },
+    });
+    if (existingCount >= 3) {
+      throw new BadRequestException(
+        `Ya tienes el máximo de 3 métodos de pago registrados para el tipo "${methodType.name}". Elimina uno existente para agregar otro.`,
+      );
+    }
 
     const paymentMethod = this.userPaymentMethodRepository.create({
       idUser: userId,
@@ -83,7 +120,19 @@ export class FinanceService {
   ): Promise<UserPaymentMethod> {
     const paymentMethod = await this.findOwnedPaymentMethod(userId, id);
 
-    if (dto.bankCode !== undefined) paymentMethod.bankCode = dto.bankCode;
+    // Validar código bancario si se está actualizando
+    if (dto.bankCode !== undefined) {
+      const bank = await this.bankRepository.findOne({
+        where: { code: dto.bankCode },
+      });
+      if (!bank) {
+        throw new BadRequestException(
+          `El código bancario '${dto.bankCode}' no corresponde a ningún banco autorizado en el catálogo`,
+        );
+      }
+      paymentMethod.bankCode = dto.bankCode;
+    }
+
     if (dto.phoneNumber !== undefined) paymentMethod.phoneNumber = dto.phoneNumber;
     if (dto.accountNumber !== undefined) paymentMethod.accountNumber = dto.accountNumber;
     if (dto.walletAddress !== undefined) paymentMethod.walletAddress = dto.walletAddress;

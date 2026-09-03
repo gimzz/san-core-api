@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { getTypeOrmConfig, customDataSourceFactory } from './config/typeorm.config';
 import { DatabaseInitModule } from './database/database-init.module';
 import { AuthModule } from './auth/auth.module';
@@ -21,6 +22,10 @@ import { SanModule } from './san/san.module';
       useFactory: (configService: ConfigService) => getTypeOrmConfig(configService),
       dataSourceFactory: customDataSourceFactory,
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 20,
+    }]),
 
     DatabaseInitModule,
     AuthModule,
