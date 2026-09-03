@@ -12,6 +12,7 @@ import { Person } from '../core/entities/person.entity';
 import { PersonDocument } from '../core/entities/person-document.entity';
 import { DocumentType } from '../core/entities/document-type.entity';
 import { User } from './entities/user.entity';
+import { Referral } from './entities/referral.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -38,6 +39,7 @@ export class AuthService {
       const docRepo = queryRunner.manager.getRepository(PersonDocument);
       const docTypeRepo = queryRunner.manager.getRepository(DocumentType);
       const userRepo = queryRunner.manager.getRepository(User);
+      const referralRepo = queryRunner.manager.getRepository(Referral);
 
       const docType = await docTypeRepo.findOne({ where: { id: dto.idDocumentType } });
       if (!docType) {
@@ -73,13 +75,28 @@ export class AuthService {
         username: dto.email,
         passwordHash: hashedPassword,
       });
-      await userRepo.save(newUser);
+      const savedUser = await userRepo.save(newUser);
+
+      if (dto.referralCode) {
+        const referrer = await userRepo.findOne({
+          where: { username: dto.referralCode.trim() },
+        });
+
+        if (referrer && referrer.id !== savedUser.id) {
+          const referralRecord = referralRepo.create({
+            idReferrerUser: referrer.id,
+            idReferredUser: savedUser.id,
+            status: 'COMPLETED',
+          });
+          await referralRepo.save(referralRecord);
+        }
+      }
 
       await queryRunner.commitTransaction();
 
       return {
         message: 'Registro completado exitosamente. Por favor inicia sesión.',
-        userId: newUser.id,
+        userId: savedUser.id,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();

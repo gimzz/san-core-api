@@ -54,4 +54,13 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty()
   documentNumber: string;
+
+  @ApiProperty({
+    example: 'juan.invitador@example.com',
+    required: false,
+    description: 'Código de referido o correo del usuario que lo invitó a la plataforma',
+  })
+  @IsString()
+  @IsOptional()
+  referralCode?: string;
 }
