@@ -1,11 +1,9 @@
 import {
   Injectable,
-  ConflictException,
-  NotFoundException,
-  UnauthorizedException,
+  HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService } from '../jwt/jwt.service';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { UsersService } from '../users/users.service';
@@ -17,6 +15,8 @@ import { Referral } from './entities/referral.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { TryCatch } from 'src/utils/try-catch.decorator';
+import { HttpResponse } from 'src/utils/http-response.util';
 
 @Injectable()
 export class AuthService {
@@ -25,7 +25,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   /**
    * Genera un código de referido alfanumérico único (ej: BOLSO-K9F2).
@@ -39,26 +39,11 @@ export class AuthService {
     return `BOLSO-${slug}`;
   }
 
-  /**
-   * Genera la pareja de tokens (access + refresh).
-   */
-  private async generateTokenPair(userId: number, email: string) {
-    const payload = { sub: userId, email };
-
-    const accessToken = await this.jwtService.signAsync(payload);
-
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.get<string>('JWT_REFRESH_SECRET', 'bolso_jwt_refresh_secret_key_2026_custom'),
-      expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
-    });
-
-    return { accessToken, refreshToken };
-  }
-
+  @TryCatch()
   async register(dto: RegisterDto) {
     const existingUser = await this.usersService.findByUsername(dto.email);
     if (existingUser) {
-      throw new ConflictException('El correo ya se encuentra registrado');
+      HttpResponse({ status: HttpStatus.CONFLICT, data: 'El correo ya se encuentra registrado' });
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -74,14 +59,14 @@ export class AuthService {
 
       const docType = await docTypeRepo.findOne({ where: { id: dto.idDocumentType } });
       if (!docType) {
-        throw new NotFoundException('Tipo de documento inválido');
+        HttpResponse({ status: HttpStatus.NOT_FOUND, data: 'Tipo de documento inválido' });
       }
 
       const existingDoc = await docRepo.findOne({
         where: { idDocumentType: dto.idDocumentType, documentNumber: dto.documentNumber },
       });
       if (existingDoc) {
-        throw new ConflictException('El número de documento ya está registrado por otro usuario');
+        HttpResponse({ status: HttpStatus.CONFLICT, data: 'El número de documento ya está registrado por otro usuario' });
       }
 
       const newPerson = personRepo.create({
@@ -137,9 +122,12 @@ export class AuthService {
       await queryRunner.commitTransaction();
 
       return {
-        message: 'Registro completado exitosamente. Por favor inicia sesión.',
-        userId: savedUser.id,
-        referralCode: savedUser.referralCode,
+        data: {
+          message: 'Registro completado exitosamente. Por favor inicia sesión.',
+          userId: savedUser.id,
+          referralCode: savedUser.referralCode,
+        },
+        status: HttpStatus.CREATED,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -149,52 +137,58 @@ export class AuthService {
     }
   }
 
+  @TryCatch()
   async login(loginDto: LoginDto) {
     const user = await this.usersService.findByUsername(loginDto.email);
     if (!user) {
-      throw new UnauthorizedException('Credenciales inválidas');
+      HttpResponse({ status: HttpStatus.UNAUTHORIZED, data: 'Credenciales inválidas' });
     }
 
     // Verificar que la cuenta esté activa (soft delete)
     if (!user.isActive) {
-      throw new UnauthorizedException('Esta cuenta ha sido desactivada');
+      HttpResponse({ status: HttpStatus.UNAUTHORIZED, data: 'Esta cuenta ha sido desactivada' });
     }
 
     const isPasswordValid = await bcrypt.compare(loginDto.password, user.passwordHash);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Credenciales inválidas');
+      HttpResponse({ status: HttpStatus.UNAUTHORIZED, data: 'Credenciales inválidas' });
     }
 
-    const tokens = await this.generateTokenPair(user.id, user.username);
-
-    const { passwordHash, ...userWithoutPassword } = user;
+    const tokens = await this.jwtService.generateToken({ sub: user.id, username: user.username });
 
     return {
-      user: userWithoutPassword,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
+      data: {
+        accessToken: tokens
+      },
+      status: HttpStatus.OK,
     };
   }
 
-  async refreshTokens(dto: RefreshTokenDto) {
-    try {
-      const payload = await this.jwtService.verifyAsync(dto.refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET', 'bolso_jwt_refresh_secret_key_2026_custom'),
+  @TryCatch()
+  async refreshTokens(token: string) {
+    const isVerify = await this.jwtService.verifyToken(token);
+    if (!isVerify) {
+      HttpResponse({
+        status: HttpStatus.UNAUTHORIZED,
+        data: 'Token de refresco inválido o expirado',
       });
-
-      const user = await this.usersService.findById(payload.sub);
-      if (!user || !user.isActive) {
-        throw new UnauthorizedException('Token de refresco inválido o usuario desactivado');
-      }
-
-      const tokens = await this.generateTokenPair(user.id, user.username);
-
-      return {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      };
-    } catch (error) {
-      throw new UnauthorizedException('Token de refresco inválido o expirado');
     }
+
+    const user = await this.usersService.findById(isVerify.sub);
+    if (!user || !user.isActive) {
+      HttpResponse({
+        status: HttpStatus.UNAUTHORIZED,
+        data: 'Token de refresco inválido o usuario desactivado',
+      });
+    }
+
+    const tokens = await this.jwtService.generateToken({ sub: user.id, username: user.username });
+
+    return {
+      data: {
+        accessToken: tokens
+      },
+      status: HttpStatus.OK,
+    };
   }
 }
