@@ -1,7 +1,6 @@
 import {
   Injectable,
-  NotFoundException,
-  ConflictException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -9,6 +8,8 @@ import { User } from '../auth/entities/user.entity';
 import { UserSocialProfile } from '../auth/entities/user-social-profile.entity';
 import { Referral } from '../auth/entities/referral.entity';
 import { AddSocialProfileDto } from './dto/user.dto';
+import { HttpResponse } from 'src/utils/http-response.util';
+import { TryCatch } from 'src/utils/try-catch.decorator';
 
 /**
  * Enmascara un correo electrónico para proteger la privacidad.
@@ -65,7 +66,7 @@ export class UsersService {
     return this.userRepository.save(user);
   }
 
-  
+  @TryCatch()
   async getMyProfile(userId: number) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -73,7 +74,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
+      HttpResponse({ status: HttpStatus.NOT_FOUND, data: 'Usuario no encontrado' });
     }
 
     const socialProfiles = await this.socialProfileRepository.find({
@@ -88,17 +89,21 @@ export class UsersService {
 
     const { passwordHash, ...safeUser } = user;
     return {
-      ...safeUser,
-      reputation: {
-        score: user.reputationScore,
-        sampleSize,
-        status: reputationInfo.status,
-        label: reputationInfo.label,
+      data: {
+        ...safeUser,
+        reputation: {
+          score: user.reputationScore,
+          sampleSize,
+          status: reputationInfo.status,
+          label: reputationInfo.label,
+        },
+        socialProfiles,
       },
-      socialProfiles,
+      status: HttpStatus.OK,
     };
   }
 
+  @TryCatch()
   async searchByUsername(username: string) {
     const user = await this.userRepository.findOne({
       where: { username },
@@ -106,7 +111,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException(`Usuario "${username}" no encontrado`);
+      HttpResponse({ status: HttpStatus.NOT_FOUND, data: `Usuario "${username}" no encontrado` });
     }
 
     // Cálculo dinámico de reputación para la búsqueda
@@ -114,15 +119,19 @@ export class UsersService {
     const reputationInfo = calculateReputationStatus(user.reputationScore, sampleSize);
 
     return {
-      id: user.id,
-      maskedUsername: maskEmail(user.username),
-      fullName: user.person
-        ? `${user.person.firstName} ${user.person.firstLastName}`
-        : 'Usuario Bolso',
-      reputationStatus: reputationInfo.status,
+      data: {
+        id: user.id,
+        maskedUsername: maskEmail(user.username),
+        fullName: user.person
+          ? `${user.person.firstName} ${user.person.firstLastName}`
+          : 'Usuario Bolso',
+        reputationStatus: reputationInfo.status,
+      },
+      status: HttpStatus.OK,
     };
   }
 
+  @TryCatch()
   async addSocialProfile(userId: number, dto: AddSocialProfileDto) {
     const existing = await this.socialProfileRepository.findOne({
       where: {
@@ -132,7 +141,7 @@ export class UsersService {
     });
 
     if (existing) {
-      throw new ConflictException('Este perfil social ya se encuentra vinculado');
+      HttpResponse({ status: HttpStatus.CONFLICT, data: 'Este perfil social ya se encuentra vinculado' });
     }
 
     const profile = this.socialProfileRepository.create({
@@ -142,21 +151,24 @@ export class UsersService {
       profileUrl: dto.profileUrl || null,
     });
 
-    return this.socialProfileRepository.save(profile);
+    const saved = await this.socialProfileRepository.save(profile);
+    return { data: saved, status: HttpStatus.CREATED };
   }
 
-  
+  @TryCatch()
   async getMyReferrals(userId: number) {
-    return this.referralRepository.find({
+    const referrals = await this.referralRepository.find({
       where: { idReferrerUser: userId },
       relations: ['referredUser', 'referredUser.person'],
     });
+    return { data: referrals, status: HttpStatus.OK };
   }
 
+  @TryCatch()
   async getReferralInfo(userId: number) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
+      HttpResponse({ status: HttpStatus.NOT_FOUND, data: 'Usuario no encontrado' });
     }
 
     const referralsCount = await this.referralRepository.count({
@@ -164,9 +176,12 @@ export class UsersService {
     });
 
     return {
-      referralCode: user.referralCode,
-      shareMessage: `¡Hola! Únete a Bolso App para ahorrar en grupo sin riesgos. Regístrate usando mi código: ${user.referralCode}`,
-      totalReferrals: referralsCount,
+      data: {
+        referralCode: user.referralCode,
+        shareMessage: `¡Hola! Únete a Bolso App para ahorrar en grupo sin riesgos. Regístrate usando mi código: ${user.referralCode}`,
+        totalReferrals: referralsCount,
+      },
+      status: HttpStatus.OK,
     };
   }
 }

@@ -24,7 +24,7 @@ import { AddSocialProfileDto } from './dto/user.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @ApiOperation({
     summary: 'Consultar mi perfil digital',
@@ -33,6 +33,7 @@ export class UsersController {
   })
   @ApiResponse({ status: 200, description: 'Perfil de usuario devuelto con éxito.' })
   @ApiResponse({ status: 401, description: 'Sesión no autorizada o token inválido.' })
+
   @Get('me')
   getMyProfile(@Request() req) {
     return this.usersService.getMyProfile(req.user.id);
@@ -76,13 +77,13 @@ export class UsersController {
   }
 
   @ApiOperation({
-  summary: 'Obtener mi código y datos de invitación',
-  description:
-    'Retorna el código de referido del usuario autenticado, mensaje listo para compartir por WhatsApp y el conteo de invitados.',
-})
-@ApiResponse({ status: 200, description: 'Datos de referido devueltos con éxito.' })
-@Get('my-referral-code')
-getReferralCode(@Request() req) {
-  return this.usersService.getReferralInfo(req.user.id);
-}
+    summary: 'Obtener mi código y datos de invitación',
+    description:
+      'Retorna el código de referido del usuario autenticado, mensaje listo para compartir por WhatsApp y el conteo de invitados.',
+  })
+  @ApiResponse({ status: 200, description: 'Datos de referido devueltos con éxito.' })
+  @Get('my-referral-code')
+  getReferralCode(@Request() req) {
+    return this.usersService.getReferralInfo(req.user.id);
+  }
 }
