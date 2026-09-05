@@ -1,8 +1,6 @@
 import {
   Injectable,
-  NotFoundException,
-  BadRequestException,
-  ForbiddenException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,6 +9,8 @@ import { PaymentMethodType } from './entities/payment-method-type.entity';
 import { UserPaymentMethod } from './entities/user-payment-method.entity';
 import { Bank } from './entities/bank.entity';
 import { CreateUserPaymentMethodDto, UpdateUserPaymentMethodDto } from './dto/finance.dto';
+import { HttpResponse } from 'src/utils/http-response.util';
+import { TryCatch } from 'src/utils/try-catch.decorator';
 
 @Injectable()
 export class FinanceService {
@@ -32,45 +32,57 @@ export class FinanceService {
   // CATÁLOGOS (lectura pública)
   // ─────────────────────────────────────────────
 
-  async getCurrencies(): Promise<Currency[]> {
-    return this.currencyRepository.find();
+  @TryCatch()
+  async getCurrencies() {
+    const currencies = await this.currencyRepository.find();
+    return { data: currencies, status: HttpStatus.OK };
   }
 
-  async getPaymentMethodTypes(): Promise<PaymentMethodType[]> {
-    return this.paymentMethodTypeRepository.find();
+  @TryCatch()
+  async getPaymentMethodTypes() {
+    const types = await this.paymentMethodTypeRepository.find();
+    return { data: types, status: HttpStatus.OK };
   }
 
-  async getBanks(): Promise<Bank[]> {
-    return this.bankRepository.find({ order: { code: 'ASC' } });
+  @TryCatch()
+  async getBanks() {
+    const banks = await this.bankRepository.find({ order: { code: 'ASC' } });
+    return { data: banks, status: HttpStatus.OK };
   }
 
   // ─────────────────────────────────────────────
   // MÉTODOS DE PAGO DEL USUARIO (CRUD autenticado)
   // ─────────────────────────────────────────────
 
-  async getMyPaymentMethods(userId: number): Promise<UserPaymentMethod[]> {
-    return this.userPaymentMethodRepository.find({
+  @TryCatch()
+  async getMyPaymentMethods(userId: number) {
+    const methods = await this.userPaymentMethodRepository.find({
       where: { idUser: userId },
       relations: ['paymentMethodType'],
     });
+    return { data: methods, status: HttpStatus.OK };
   }
 
-  async getPaymentMethodById(userId: number, id: number): Promise<UserPaymentMethod> {
-    return this.findOwnedPaymentMethod(userId, id);
+  @TryCatch()
+  async getPaymentMethodById(userId: number, id: number) {
+    const method = await this.findOwnedPaymentMethod(userId, id);
+    return { data: method, status: HttpStatus.OK };
   }
 
+  @TryCatch()
   async createPaymentMethod(
     userId: number,
     dto: CreateUserPaymentMethodDto,
-  ): Promise<UserPaymentMethod> {
+  ) {
     // Validar que el tipo de método existe en el catálogo
     const methodType = await this.paymentMethodTypeRepository.findOne({
       where: { id: dto.idPaymentMethodType },
     });
     if (!methodType) {
-      throw new NotFoundException(
-        `Tipo de método de pago con ID ${dto.idPaymentMethodType} no encontrado en el catálogo`,
-      );
+      HttpResponse({
+        status: HttpStatus.NOT_FOUND,
+        data: `Tipo de método de pago con ID ${dto.idPaymentMethodType} no encontrado en el catálogo`,
+      });
     }
 
     // Validación de campos requeridos según el tipo de método
@@ -82,9 +94,10 @@ export class FinanceService {
         where: { code: dto.bankCode },
       });
       if (!bank) {
-        throw new BadRequestException(
-          `El código bancario '${dto.bankCode}' no corresponde a ningún banco autorizado en el catálogo`,
-        );
+        HttpResponse({
+          status: HttpStatus.BAD_REQUEST,
+          data: `El código bancario '${dto.bankCode}' no corresponde a ningún banco autorizado en el catálogo`,
+        });
       }
     }
 
@@ -96,9 +109,10 @@ export class FinanceService {
       },
     });
     if (existingCount >= 3) {
-      throw new BadRequestException(
-        `Ya tienes el máximo de 3 métodos de pago registrados para el tipo "${methodType.name}". Elimina uno existente para agregar otro.`,
-      );
+      HttpResponse({
+        status: HttpStatus.BAD_REQUEST,
+        data: `Ya tienes el máximo de 3 métodos de pago registrados para el tipo "${methodType.name}". Elimina uno existente para agregar otro.`,
+      });
     }
 
     const paymentMethod = this.userPaymentMethodRepository.create({
@@ -110,14 +124,16 @@ export class FinanceService {
       walletAddress: dto.walletAddress ?? null,
     });
 
-    return this.userPaymentMethodRepository.save(paymentMethod);
+    const saved = await this.userPaymentMethodRepository.save(paymentMethod);
+    return { data: saved, status: HttpStatus.CREATED };
   }
 
+  @TryCatch()
   async updatePaymentMethod(
     userId: number,
     id: number,
     dto: UpdateUserPaymentMethodDto,
-  ): Promise<UserPaymentMethod> {
+  ) {
     const paymentMethod = await this.findOwnedPaymentMethod(userId, id);
 
     // Validar código bancario si se está actualizando
@@ -126,9 +142,10 @@ export class FinanceService {
         where: { code: dto.bankCode },
       });
       if (!bank) {
-        throw new BadRequestException(
-          `El código bancario '${dto.bankCode}' no corresponde a ningún banco autorizado en el catálogo`,
-        );
+        HttpResponse({
+          status: HttpStatus.BAD_REQUEST,
+          data: `El código bancario '${dto.bankCode}' no corresponde a ningún banco autorizado en el catálogo`,
+        });
       }
       paymentMethod.bankCode = dto.bankCode;
     }
@@ -137,13 +154,15 @@ export class FinanceService {
     if (dto.accountNumber !== undefined) paymentMethod.accountNumber = dto.accountNumber;
     if (dto.walletAddress !== undefined) paymentMethod.walletAddress = dto.walletAddress;
 
-    return this.userPaymentMethodRepository.save(paymentMethod);
+    const saved = await this.userPaymentMethodRepository.save(paymentMethod);
+    return { data: saved, status: HttpStatus.OK };
   }
 
-  async deletePaymentMethod(userId: number, id: number): Promise<{ message: string }> {
+  @TryCatch()
+  async deletePaymentMethod(userId: number, id: number) {
     const paymentMethod = await this.findOwnedPaymentMethod(userId, id);
     await this.userPaymentMethodRepository.remove(paymentMethod);
-    return { message: 'Método de pago eliminado exitosamente' };
+    return { data: 'Método de pago eliminado exitosamente', type: 'success' as const, status: HttpStatus.OK };
   }
 
   // ─────────────────────────────────────────────
@@ -152,7 +171,7 @@ export class FinanceService {
 
   /**
    * Verifica que el método de pago exista y pertenezca al usuario autenticado.
-   * Lanza NotFoundException si no existe, ForbiddenException si no es del usuario.
+   * Lanza HttpResponse NOT_FOUND si no existe, FORBIDDEN si no es del usuario.
    */
   private async findOwnedPaymentMethod(
     userId: number,
@@ -164,11 +183,11 @@ export class FinanceService {
     });
 
     if (!paymentMethod) {
-      throw new NotFoundException(`Método de pago con ID ${id} no encontrado`);
+      HttpResponse({ status: HttpStatus.NOT_FOUND, data: `Método de pago con ID ${id} no encontrado` });
     }
 
     if (paymentMethod.idUser !== userId) {
-      throw new ForbiddenException('No tienes permiso para modificar este método de pago');
+      HttpResponse({ status: HttpStatus.FORBIDDEN, data: 'No tienes permiso para modificar este método de pago' });
     }
 
     return paymentMethod;
@@ -187,33 +206,38 @@ export class FinanceService {
     if (name.includes('MOVIL') || name.includes('MÓVIL') || name.includes('PAGO_MOVIL')) {
       // Pago Móvil: requiere banco y teléfono
       if (!dto.bankCode) {
-        throw new BadRequestException(
-          'El código bancario (bankCode) es requerido para Pago Móvil',
-        );
+        HttpResponse({
+          status: HttpStatus.BAD_REQUEST,
+          data: 'El código bancario (bankCode) es requerido para Pago Móvil',
+        });
       }
       if (!dto.phoneNumber) {
-        throw new BadRequestException(
-          'El número de teléfono (phoneNumber) es requerido para Pago Móvil',
-        );
+        HttpResponse({
+          status: HttpStatus.BAD_REQUEST,
+          data: 'El número de teléfono (phoneNumber) es requerido para Pago Móvil',
+        });
       }
     } else if (name.includes('TRANSFERENCIA') || name.includes('BANCARIA')) {
       // Transferencia Bancaria: requiere banco y número de cuenta
       if (!dto.bankCode) {
-        throw new BadRequestException(
-          'El código bancario (bankCode) es requerido para Transferencia Bancaria',
-        );
+        HttpResponse({
+          status: HttpStatus.BAD_REQUEST,
+          data: 'El código bancario (bankCode) es requerido para Transferencia Bancaria',
+        });
       }
       if (!dto.accountNumber) {
-        throw new BadRequestException(
-          'El número de cuenta (accountNumber) es requerido para Transferencia Bancaria',
-        );
+        HttpResponse({
+          status: HttpStatus.BAD_REQUEST,
+          data: 'El número de cuenta (accountNumber) es requerido para Transferencia Bancaria',
+        });
       }
     } else if (name.includes('BINANCE')) {
       // Binance Pay: requiere correo o dirección de billetera
       if (!dto.walletAddress) {
-        throw new BadRequestException(
-          'La dirección de billetera o correo (walletAddress) es requerida para Binance Pay',
-        );
+        HttpResponse({
+          status: HttpStatus.BAD_REQUEST,
+          data: 'La dirección de billetera o correo (walletAddress) es requerida para Binance Pay',
+        });
       }
     }
     // Efectivo: no requiere campos adicionales
