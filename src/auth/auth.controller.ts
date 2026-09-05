@@ -7,6 +7,7 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,7 +26,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 @ApiTags('Autenticación y Seguridad')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @ApiOperation({
     summary: 'Registrar nuevo usuario',
@@ -72,7 +73,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+    return await this.authService.login(loginDto);
   }
 
   @ApiOperation({
@@ -80,7 +81,6 @@ export class AuthController {
     description:
       'Valida el refresh token proporcionado y re-emite una nueva pareja de tokens (access + refresh) sin solicitar credenciales.',
   })
-  @ApiBody({ type: RefreshTokenDto })
   @ApiResponse({
     status: 200,
     description: 'Tokens renovados exitosamente.',
@@ -91,8 +91,12 @@ export class AuthController {
   })
   @HttpCode(HttpStatus.OK)
   @Post('refresh')
-  async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refreshTokens(refreshTokenDto);
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  async refreshTokens(@Req() req: any) {
+    const authorization = req.headers.authorization;
+    const token = authorization.split(' ')[1];
+    return await this.authService.refreshTokens(token);
   }
 
   @ApiOperation({

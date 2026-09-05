@@ -3,6 +3,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { ResponseInterceptor } from './utils/response.interceptor';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -22,6 +23,9 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+
+  // Sincronizar HTTP status code con el campo status del body
+  app.useGlobalInterceptors(new ResponseInterceptor());
 
   // Setup Swagger Documentation
   const config = new DocumentBuilder()
